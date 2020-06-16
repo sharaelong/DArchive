@@ -1,0 +1,24 @@
+{
+  "dependencies": {
+    "jsdom": "^16.2.2",
+    "puppeteer": "^4.0.0"
+  },
+  "name": "darchive",
+  "version": "0.0.1",
+  "main": "index.js",
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sharaelong/DArchive.git"
+  },
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/sharaelong/DArchive/issues"
+  },
+  "homepage": "https://github.com/sharaelong/DArchive#readme",
+  "description": ""
+}
