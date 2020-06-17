@@ -37,15 +37,35 @@ const url = 'https://old.reddit.com/r/programming/comments/fnjpaq/excalidraw_now
             promise = promise.then(({ object: { objectId } }) => {
                 let eventListenersPromise = client.send('DOMDebugger.getEventListeners', { objectId });
                 return eventListenersPromise;
+            }).then(({ listeners }) => {
+                let boxModel = client.send('DOM.getBoxModel', { nodeId });
+                boxModel = boxModel.then(({ model }) => {
+                    let size = model.width * model.height;
+                    return ({ nodeId, listeners, size });
+                }).catch(err => {});
+                return boxModel;
             });
-            promise = promise.then(({ listeners }) => ({ listeners, nodeId }));
             return promise;
         })
     )) // objectId: Runtime.RemoteObjectId, nodeId: DOM.NodeId
+          .filter(eventEl => eventEl)
           .filter(eventEl => eventEl.listeners.some(({ type }) => targetEventTypes.includes(type)));
 
-    for (let eventEl of eventListeners) { console.log(eventEl.listeners); } 
-    console.log(eventListeners.length, eventListeners);
+    console.log(eventListeners);
 
+    // const elementBoxModel = (await Promise.all(
+    //     eventListeners.map(eventEl => {
+    //         let boxModel = client.send('DOM.getBoxModel', { nodeId: eventEl.nodeId });
+    //         boxModel = boxModel.then(({ model }) => { eventEl.size = model.width * model.height; return model; }).catch(err => console.log(err));
+    //         return boxModel;
+    //     })
+    // ));
+    
+
+    // for (let eventEl of eventListeners) { console.log(eventEl.listeners); } 
+    // console.log(eventListeners.length, eventListeners);
+
+    // sort by padding edge
+    
     await browser.close();
 })();
