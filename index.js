@@ -1,14 +1,22 @@
 const process = require('process');
 const puppeteer = require('puppeteer');
 
+// nodejs module
+const path = require('path');
+const fs = require('fs');
+
 const DEBUG = !!process.env.DEBUG;
 const targetEventTypes = ['click'];
 
-const url = 'https://old.reddit.com/r/programming/comments/fnjpaq/excalidraw_now_supports_real_time_end_to_end/';
+const targetURL = 'https://old.reddit.com/r/programming/comments/fnjpaq/excalidraw_now_supports_real_time_end_to_end';
+let dir = './archive/' + new URL(targetURL).hostname + new URL(targetURL).pathname;
+if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+}
 
 (async () => {
     const browser = await puppeteer.launch({ headless: !DEBUG });
-    const page = await browser.newPage();
+    const [page] = await browser.pages();
     await page.setRequestInterception(true);
     page.on('request', request => {
         if (!new URL(request.url()).host.includes("reddit")) {
@@ -17,9 +25,25 @@ const url = 'https://old.reddit.com/r/programming/comments/fnjpaq/excalidraw_now
             request.continue();
         }
     });
-    await page.goto(url);
 
+    page.on('response', async (response) => {
+        console.log("url:", response.url());
+        const status = response.status();
+        if ((status >= 300) && (status <= 399)) {
+            console.log('Redirect from', response.url(), 'to', response.headers()['location']);
+        } else {
+            const fileName = response.url().split('/').pop();
+            const filePath = dir + '/' + fileName;
+            if (fileName) {
+                await fs.writeFileSync(filePath, await response.buffer());
+            }
+        }
+    });
+
+    await page.goto(targetURL, { waitUntil: 'networkidle2' });
     const client = await page.target().createCDPSession();
+
+    
     const {
         root: {
             nodeId: documentNodeId
@@ -65,16 +89,18 @@ const url = 'https://old.reddit.com/r/programming/comments/fnjpaq/excalidraw_now
     console.log(temp);
     for (let i = 0; 2 * i < temp.length; i++) {
         console.log("??");
-            if (temp[2 * i] === 'class') {
-                let classKey = temp[2 * i + 1].trim().split(" ");
-                console.log(classKey);
-                await page.evaluate(classKey => {
-                    console.log("Waiting...");
-                    document.querySelector(`.${classKey[0]}`).dispatchEvent(new Event('click'));
-                    console.log("Dispatched!");
-                }, classKey);
-            }
+        if (temp[2 * i] === 'class') {
+            let classKey = temp[2 * i + 1].trim().split(" ");
+            console.log(classKey);
+            await page.evaluate(classKey => {
+                console.log("Waiting...");
+                document.querySelector(`.${classKey[0]}`).dispatchEvent(new Event('click'));
+                console.log("Dispatched!");
+            }, classKey);
         }
+    }
 
-    await browser.close();
+    setTimeout(async () => {
+        await browser.close();
+    }, 1500);    
 })();
