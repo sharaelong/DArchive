@@ -3,47 +3,58 @@ const puppeteer = require('puppeteer');
 
 // nodejs module
 const path = require('path');
-const fs = require('fs');
+const fs = require('fs/promises');
 
 const DEBUG = !!process.env.DEBUG;
 const targetEventTypes = ['click'];
 
-const targetURL = 'https://old.reddit.com/r/programming/comments/fnjpaq/excalidraw_now_supports_real_time_end_to_end';
+const targetURL = 'https://github.com';
 let dir = './archive/' + new URL(targetURL).hostname + new URL(targetURL).pathname;
-if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-}
 
 (async () => {
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, 'map.txt'), '');
+    
     const browser = await puppeteer.launch({ headless: !DEBUG });
     const [page] = await browser.pages();
     await page.setRequestInterception(true);
+
     page.on('request', request => {
-        if (!new URL(request.url()).host.includes("reddit")) {
+        if (!new URL(request.url()).host.includes("github")) {
             request.abort();
         } else {
             request.continue();
         }
+        
     });
-
+    
     page.on('response', async (response) => {
         console.log("url:", response.url());
         const status = response.status();
-        if ((status >= 300) && (status <= 399)) {
+        console.log("status:", status);
+        
+        if (!(status >= 200 && status < 300)) {
             console.log('Redirect from', response.url(), 'to', response.headers()['location']);
         } else {
             const fileName = response.url().split('/').pop();
-            const filePath = dir + '/' + fileName;
-            if (fileName) {
-                await fs.writeFileSync(filePath, await response.buffer());
+            const filePath = path.join(dir, fileName);
+            try {
+                const buffer = await response.buffer();    
+                if (fileName) {
+                    await fs.writeFile(filePath, buffer);
+                    await fs.appendFile(path.join(dir, 'map.txt'), await response.request().url() + " " + await fileName + "\n");
+                }
+            } catch (error) {
+                console.error(error);
+                console.error('This error originated from ', response);
             }
         }
     });
-
+    
     await page.goto(targetURL, { waitUntil: 'networkidle2' });
     const client = await page.target().createCDPSession();
 
-    
+    // get all eventListeners defined by targetEvent
     const {
         root: {
             nodeId: documentNodeId
@@ -75,8 +86,6 @@ if (!fs.existsSync(dir)) {
           .filter(eventEl => eventEl)
           .filter(eventEl => eventEl.listeners.some(({ type }) => targetEventTypes.includes(type)));
 
-    // console.log(eventListeners);
-
     const nodeList = (await Promise.all(
         eventListeners.map(eventEl => {
             let node = client.send('DOM.describeNode', { nodeId: eventEl.nodeId });
@@ -102,5 +111,5 @@ if (!fs.existsSync(dir)) {
 
     setTimeout(async () => {
         await browser.close();
-    }, 1500);    
+    }, 1500);
 })();
