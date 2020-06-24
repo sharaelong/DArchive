@@ -8,7 +8,7 @@ const fs = require('fs/promises');
 const DEBUG = !!process.env.DEBUG;
 const targetEventTypes = ['click'];
 
-const targetURL = 'https://github.com';
+const targetURL = 'https://www.youtube.com/watch?v=O-2ihWw1FOs';
 let dir = './archive/' + new URL(targetURL).hostname + new URL(targetURL).pathname;
 
 (async () => {
@@ -20,18 +20,17 @@ let dir = './archive/' + new URL(targetURL).hostname + new URL(targetURL).pathna
     await page.setRequestInterception(true);
 
     page.on('request', request => {
-        if (!new URL(request.url()).host.includes("github")) {
+        if (!new URL(request.url()).host.includes("youtube")) {
             request.abort();
         } else {
             request.continue();
         }
-        
     });
     
     page.on('response', async (response) => {
-        console.log("url:", response.url());
+        // console.log("url:", response.url());
         const status = response.status();
-        console.log("status:", status);
+        // console.log("status:", status);
         
         if (!(status >= 200 && status < 300)) {
             console.log('Redirect from', response.url(), 'to', response.headers()['location']);
@@ -41,7 +40,7 @@ let dir = './archive/' + new URL(targetURL).hostname + new URL(targetURL).pathna
             try {
                 const buffer = await response.buffer();    
                 if (fileName) {
-                    await fs.writeFile(filePath, buffer);
+                    await fs.writeFile(filePath.substring(0, 255), buffer);
                     await fs.appendFile(path.join(dir, 'map.txt'), await response.request().url() + " " + await fileName + "\n");
                 }
             } catch (error) {
@@ -54,6 +53,7 @@ let dir = './archive/' + new URL(targetURL).hostname + new URL(targetURL).pathna
     await page.goto(targetURL, { waitUntil: 'networkidle2' });
     const client = await page.target().createCDPSession();
 
+    
     // get all eventListeners defined by targetEvent
     const {
         root: {
@@ -66,7 +66,7 @@ let dir = './archive/' + new URL(targetURL).hostname + new URL(targetURL).pathna
         nodeId: documentNodeId,
         selector: '*'
     });
-    const eventListeners = (await Promise.all(
+    let eventListeners = (await Promise.all(
         nodeIds.map(nodeId => {
             let promise = client.send('DOM.resolveNode', { nodeId }).catch(err => {});
             promise = promise.then(({ object: { objectId } }) => {
@@ -77,7 +77,7 @@ let dir = './archive/' + new URL(targetURL).hostname + new URL(targetURL).pathna
                 boxModel = boxModel.then(({ model }) => {
                     let size = model.width * model.height;
                     return ({ nodeId, listeners, size });
-                }).catch(err => {});
+                }).catch(error => {});
                 return boxModel;
             });
             return promise;
@@ -94,21 +94,20 @@ let dir = './archive/' + new URL(targetURL).hostname + new URL(targetURL).pathna
     ));
 
     // dispatch event prototype
-    let temp = nodeList[2].node.attributes;
-    console.log(temp);
-    for (let i = 0; 2 * i < temp.length; i++) {
-        console.log("??");
-        if (temp[2 * i] === 'class') {
-            let classKey = temp[2 * i + 1].trim().split(" ");
-            console.log(classKey);
-            await page.evaluate(classKey => {
-                console.log("Waiting...");
-                document.querySelector(`.${classKey[0]}`).dispatchEvent(new Event('click'));
-                console.log("Dispatched!");
-            }, classKey);
+    if (nodeList.length) {
+        let temp = nodeList[2].node.attributes;
+        console.log(temp);
+        for (let i = 0; 2 * i < temp.length; i++) {
+            console.log("??");
+            if (temp[2 * i] === 'class') {
+                let classKey = temp[2 * i + 1].trim().split(" ");
+                console.log(classKey);
+                await page.evaluate(classKey => {
+                    document.querySelector(`.${classKey[0]}`).dispatchEvent(new Event('click'));
+                }, classKey);
+            }
         }
     }
-
     setTimeout(async () => {
         await browser.close();
     }, 1500);
