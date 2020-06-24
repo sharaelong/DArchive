@@ -8,7 +8,7 @@ const fs = require('fs/promises');
 const DEBUG = !!process.env.DEBUG;
 const targetEventTypes = ['click'];
 
-const targetURL = 'https://www.youtube.com/watch?v=O-2ihWw1FOs';
+const targetURL = 'https://old.reddit.com/r/programming/comments/fnjpaq/excalidraw_now_supports_real_time_end_to_end/';
 let dir = './archive/' + new URL(targetURL).hostname + new URL(targetURL).pathname;
 
 (async () => {
@@ -20,7 +20,7 @@ let dir = './archive/' + new URL(targetURL).hostname + new URL(targetURL).pathna
     await page.setRequestInterception(true);
 
     page.on('request', request => {
-        if (!new URL(request.url()).host.includes("youtube")) {
+        if (!new URL(request.url()).host.includes("reddit")) {
             request.abort();
         } else {
             request.continue();
@@ -68,7 +68,8 @@ let dir = './archive/' + new URL(targetURL).hostname + new URL(targetURL).pathna
     });
     let eventListeners = (await Promise.all(
         nodeIds.map(nodeId => {
-            let promise = client.send('DOM.resolveNode', { nodeId }).catch(err => {});
+            client.send('DOM.setAttributeValue', { nodeId: nodeId, name: "darchive", value: nodeId.toString() });
+            let promise = client.send('DOM.resolveNode', { nodeId }).catch(error => console.error("Error on resolveNode:", error));
             promise = promise.then(({ object: { objectId } }) => {
                 let eventListenersPromise = client.send('DOMDebugger.getEventListeners', { objectId });
                 return eventListenersPromise;
@@ -98,13 +99,11 @@ let dir = './archive/' + new URL(targetURL).hostname + new URL(targetURL).pathna
         let temp = nodeList[2].node.attributes;
         console.log(temp);
         for (let i = 0; 2 * i < temp.length; i++) {
-            console.log("??");
-            if (temp[2 * i] === 'class') {
-                let classKey = temp[2 * i + 1].trim().split(" ");
-                console.log(classKey);
-                await page.evaluate(classKey => {
-                    document.querySelector(`.${classKey[0]}`).dispatchEvent(new Event('click'));
-                }, classKey);
+            if (temp[2 * i] === 'darchive') {
+                let nodeKey = temp[2 * i + 1];
+                await page.evaluate(nodeKey => {
+                    document.querySelector(`[darchive="${nodeKey}"]`).dispatchEvent(new Event('click'));
+                }, nodeKey);
             }
         }
     }
