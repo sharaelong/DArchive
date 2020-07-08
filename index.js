@@ -10,8 +10,11 @@ const readline = require('readline');
 const DEBUG = !!process.env.DEBUG;
 const targetEventTypes = ['click'];
 
-const targetURL = 'https://github.com';
-let dir = './archive/' + new URL(targetURL).hostname + new URL(targetURL).pathname;
+if (!process.env.URL) {
+    console.error("Any target url isn't setted. Please check URL env is exist.");
+}
+const targetURL = new URL(process.env.URL);
+let dir = './archive/' + targetURL.hostname + targetURL.pathname;
 
 async function archive() {
     await fs.mkdir(dir, { recursive: true });
@@ -23,24 +26,11 @@ async function archive() {
             '--disable-web-security'
         ]
     });
-    const [page] = await browser.pages();
-    await page.setRequestInterception(true);
+    const [page] = await browser.pages();    
 
-    page.on('request', request => {
-        if (!new URL(request.url()).host.includes("github")) {
-            request.abort();
-        } else {
-            request.continue();
-        }
-    });
-    
     page.on('response', async (response) => {
-        //console.log("url:", response.url());
         const status = response.status();
         const resourceType = response.request().resourceType();
-        // console.log("Type:", resourceType);
-        // console.log("Request headers:", await response.request().headers());
-        // console.log("Headers:", await response.headers());
         
         if (!(status >= 200 && status < 300)) {
             console.log('Redirect from', response.url(), 'to', response.headers()['location']);
@@ -59,12 +49,11 @@ async function archive() {
                 }
             } catch (error) {
                 console.error(error);
-                // console.error('This error originated from ', response);
             }
         }
     });
     
-    await page.goto(targetURL, { waitUntil: 'networkidle2' });
+    await page.goto(targetURL.href, { waitUntil: 'networkidle2' });
     const client = await page.target().createCDPSession();
 
     // get all eventListeners defined by targetEvent
@@ -140,7 +129,6 @@ async function replay() {
     let urlResourceMap = await readMapFile();
     
     page.on('request', async (request) => {
-        // console.log("request:", request);
         const resourceURL = await request.url().split('/').pop();
         
         let bodyData;
@@ -177,7 +165,7 @@ async function replay() {
         }
     });
 
-    await page.goto(targetURL, { waitUntil: 'domcontentloaded' });
+    await page.goto(targetURL.href, { waitUntil: 'domcontentloaded' });
 }
 
 function readMapFile() {
